@@ -26,7 +26,7 @@ namespace OsuLiveDataExport
             Plugin plugin = (OsuRTDataProviderPlugin)getHoster().EnumPluings().FirstOrDefault(p => p.Name == "OsuRTDataProvider");
             if (plugin is OsuRTDataProviderPlugin dataprovider)
             {
-                data = new LiveData(dataprovider.ListenerManager, @"../livedata.txt");
+                data = new LiveData(dataprovider.ListenerManager, @"../OsuLiveDataExport.json");
             }
         }
 

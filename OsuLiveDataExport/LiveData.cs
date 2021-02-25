@@ -7,6 +7,8 @@ using System.Text;
 using System.Runtime.InteropServices;
 using Newtonsoft.Json;
 using static OsuRTDataProvider.Listen.OsuListenerManager;
+using WebSocketSharp;
+using WebSocketSharp.Server;
 
 namespace OsuLiveDataExport
 {
@@ -28,6 +30,9 @@ namespace OsuLiveDataExport
         public double errormin;
         public double errormax;
         public double ur;
+        
+        public PlayType play_type;
+        public List<HitEvent> hit_events;
 
         public string osu_status;
     }
@@ -37,6 +42,9 @@ namespace OsuLiveDataExport
         private OsuListenerManager Listener;
         private OsuData Data;
         private string OutputFile;
+
+        private String websocketAddr = "ws://127.0.0.1:3388";
+        private WebSocketServer ws;
 
         public LiveData(OsuListenerManager listenerManager, string file)
         {
@@ -65,7 +73,18 @@ namespace OsuLiveDataExport
                 Data.ur         = es.UnstableRate;
             };
 
+            Listener.OnHitEventsChanged += (pt, he) =>
+            {
+                Data.play_type = pt;
+                Data.hit_events = he;
+            };
+
             Listener.OnStatusChanged += StatusChanged;
+
+            ws = new WebSocketServer(websocketAddr);
+            Console.WriteLine("Starting websocket server for OsuLiveDataExport at "+websocketAddr);
+            ws.AddWebSocketService<WebSocketHandler>("/ws");
+            ws.Start();
         }
 
         public void ResetData(Beatmap beatmap = null)
@@ -88,22 +107,33 @@ namespace OsuLiveDataExport
         public void StatusChanged(OsuStatus before, OsuStatus now)
         {
             Data.osu_status = now.ToString();
-            SaveData();
+            Byte[] data = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(Data));
+            SaveData(data);
         }
 
         public void UpdateData(int timeplayed)
         {
             Data.time = timeplayed;
-            SaveData();
+            String dataStr = JsonConvert.SerializeObject(Data);
+            Byte[] data = Encoding.UTF8.GetBytes(dataStr);
+            SaveData(data);
+            ws.WebSocketServices.Broadcast(dataStr);
         }
 
-        public void SaveData()
+        public void SaveData(Byte[] data)
         {
-            Byte[] data = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(Data));
             File.WriteAllText(OutputFile, string.Empty);
             FileStream stream = File.OpenWrite(OutputFile);
             stream.Write(data, 0, data.Length);
             stream.Close();
+        }
+    }
+
+    public class WebSocketHandler : WebSocketBehavior
+    {
+        protected override void OnOpen()
+        {
+            Send("Connected");
         }
     }
 }
